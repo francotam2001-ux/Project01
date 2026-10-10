@@ -6,5 +6,5 @@
 
 GEMINI_API_KEY = "你的GEMINI_API_KEY填這裡"
 
-# AI 模型（如果報錯話搵唔到模型，可以改成 "gemini-2.0-flash"）
-GEMINI_MODEL = "gemini-2.5-flash"
+# AI 模型（如果之後又話模型唔存在，睇 Google 嘅錯誤訊息，佢會話你知用邊個新模型）
+GEMINI_MODEL = "gemini-3.8-flash"
