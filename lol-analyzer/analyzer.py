@@ -1,17 +1,25 @@
-import pyautogui, base64, time, os, sys, requests
-import pytesseract
-from PIL import Image
+"""
+LOL 裝備分析系統 (Gemini 版)
+================================
+自動截圖 → Gemini 視覺識別 → AI 分析 → 即時建議
+Gemini 識睇圖，所以直接認到裝備圖標！
+"""
+
+import pyautogui
+import base64, time, os, sys, requests
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from config import DEEPSEEK_API_KEY
+from config import GEMINI_API_KEY, GEMINI_MODEL
+
 
 def init_ai():
-    if DEEPSEEK_API_KEY == '你的DEEPSEEK_API_KEY填這裡':
-        print('❌ 請先在 config.py 填入你的 DeepSeek API Key!')
-        print('   申請: https://platform.deepseek.com')
+    if GEMINI_API_KEY == '你的GEMINI_API_KEY填這裡':
+        print('❌ 請先在 config.py 填入你的 Gemini API Key!')
+        print('   申請: https://aistudio.google.com/app/apikey')
         return False
-    print('✅ AI 引擎啟動成功! (DeepSeek)')
+    print(f'✅ AI 引擎啟動成功! (Gemini - {GEMINI_MODEL})')
     return True
+
 
 def take_screenshot(save_path='screenshot.png'):
     print('📸 正在截圖...')
@@ -19,76 +27,64 @@ def take_screenshot(save_path='screenshot.png'):
     print(f'✅ 截圖儲存至: {save_path}')
     return save_path
 
-def extract_text(image_path):
-    """OCR 識別截圖中的文字"""
-    print('🔍 正在識別畫面內容...')
-    try:
-        img = Image.open(image_path)
-        # 先試中文+英文，如果失敗就用英文
-        try:
-            text = pytesseract.image_to_string(img, lang='chi_tra+eng')
-        except:
-            text = pytesseract.image_to_string(img, lang='eng')
-        return text.strip()
-    except Exception as e:
-        print(f'⚠️ OCR 失敗: {e}')
-        return ''
+
+def image_to_base64(image_path):
+    with open(image_path, 'rb') as f:
+        return base64.b64encode(f.read()).decode('utf-8')
+
 
 def analyze_with_ai(image_path):
-    print('🤖 正在用 DeepSeek 分析戰況，請稍等...')
-    
-    # 用 OCR 識別文字
-    ocr_text = extract_text(image_path)
-    
-    if ocr_text:
-        context = f"以下係從 LOL 截圖識別到的文字資訊:\n{ocr_text}"
-    else:
-        context = "截圖 OCR 未能識別到文字，請基於一般 LOL 遊戲結構作分析。"
+    print('🤖 正在用 Gemini 分析戰況，請稍等...')
 
-    prompt = f"""你係一個 League of Legends (英雄聯盟) 專業教練。
+    image_data = image_to_base64(image_path)
 
-{context}
-
-請分析上面的資訊，用繁體中文廣東話回答：
+    prompt = '''你係一個 League of Legends (英雄聯盟) 專業教練。
+請仔細睇呢張 LOL 遊戲截圖，用繁體中文廣東話回答：
 
 1. 📦 裝備識別
-   - 我方裝備係咩？
-   - 對方裝備係咩？
+   - 我方每個英雄嘅裝備係咩？
+   - 對方每個英雄嘅裝備係咩？
 
 2. 📊 戰況分析
-   - 目前雙方補兵/KDA/金錢差距
+   - 目前雙方補兵 / KDA / 經濟差距
    - 邊一方有優勢？為什麼？
 
 3. ⚔️ 傷害類型分析
-   - 我方係 AD/AP/坦克？
-   - 對方係 AD/AP/坦克？
+   - 我方主要係 AD / AP / 坦克？
+   - 對方主要係 AD / AP / 坦克？
 
 4. 💡 即時建議
-   - 下一件應該買咩裝備？
+   - 下一件應該買咩裝備？為什麼？
    - 依家應該打團？發育？推塔？
-   - 有冇特別要注意嘅野？
+   - 有冇特別要注意嘅危險？
 
-請分點列出，用簡單易明嘅廣東話！"""
+請分點列出，用簡單易明嘅廣東話！
+如果截圖唔係 LOL 遊戲畫面，請直接話我知。'''
 
-    headers = {
-        'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
-        'Content-Type': 'application/json'
-    }
+    url = (f'https://generativelanguage.googleapis.com/v1beta/models/'
+           f'{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}')
+
     payload = {
-        'model': 'deepseek-chat',
-        'messages': [{'role': 'user', 'content': prompt}],
-        'max_tokens': 1500
+        'contents': [{
+            'parts': [
+                {'text': prompt},
+                {'inline_data': {'mime_type': 'image/png', 'data': image_data}}
+            ]
+        }]
     }
+
     try:
-        r = requests.post('https://api.deepseek.com/chat/completions',
-                          headers=headers, json=payload, timeout=30)
+        r = requests.post(url, json=payload, timeout=60)
         result = r.json()
-        if 'choices' in result:
-            return result['choices'][0]['message']['content']
+
+        if 'candidates' in result:
+            return result['candidates'][0]['content']['parts'][0]['text']
         else:
-            return f"❌ API 錯誤: {result.get('error', {}).get('message', '未知錯誤')}"
+            err = result.get('error', {}).get('message', '未知錯誤')
+            return f'❌ API 錯誤: {err}\n\n(提示: 如果話模型唔存在, 試下改 config.py 嘅 GEMINI_MODEL)'
     except Exception as e:
         return f'❌ 連線失敗: {e}'
+
 
 def display_result(text):
     print('\n' + '='*60)
@@ -96,6 +92,7 @@ def display_result(text):
     print('='*60)
     print(text)
     print('='*60 + '\n')
+
 
 def save_analysis(text):
     ts = time.strftime('%Y%m%d_%H%M%S')
@@ -106,9 +103,10 @@ def save_analysis(text):
         f.write(f"分析時間: {time.strftime('%Y-%m-%d %H:%M:%S')}\n{'='*60}\n{text}")
     print(f'📝 儲存至: {path}')
 
+
 def main():
     print('='*60)
-    print('🎮  LOL 裝備分析系統 (DeepSeek 版)')
+    print('🎮  LOL 裝備分析系統 (Gemini 版)')
     print('='*60)
     if not init_ai():
         return
@@ -125,14 +123,14 @@ def main():
             print('👋 再見! GL HF!')
             break
         elif c == 'f':
-            img = input('📁 圖片路徑: ').strip()
+            img = input('📁 圖片路徑: ').strip().strip('"')
             if not os.path.exists(img):
                 print(f'❌ 找不到: {img}')
                 continue
         else:
             if c != 's':
                 print('⏳ 3秒後截圖，請切換到 LOL!')
-                for i in range(3,0,-1):
+                for i in range(3, 0, -1):
                     print(f'   {i}...')
                     time.sleep(1)
             img = take_screenshot(ss_path)
@@ -140,6 +138,7 @@ def main():
         display_result(result)
         if input('💾 儲存分析嗎? (y/n): ').strip().lower() == 'y':
             save_analysis(result)
+
 
 if __name__ == '__main__':
     main()
