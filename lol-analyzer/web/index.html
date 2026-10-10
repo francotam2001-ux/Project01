@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0a1428">
+<title>🎮 LOL 裝備分析器</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang HK", "Microsoft JhengHei", sans-serif;
+  background: #0a1428; color: #e8e8e8; min-height: 100vh; line-height: 1.6;
+}
+.app { max-width: 640px; margin: 0 auto; padding: 16px 16px 60px; }
+
+header { text-align: center; padding: 20px 0 16px; }
+header h1 { font-size: 1.5rem; color: #c8aa6e; letter-spacing: 1px; }
+header p { font-size: .8rem; color: #7a8ba0; margin-top: 4px; }
+
+.card {
+  background: #111c31; border: 1px solid #1e3a5f; border-radius: 14px;
+  padding: 16px; margin-bottom: 14px;
+}
+.card h2 { font-size: .95rem; color: #c8aa6e; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+
+label { display: block; font-size: .8rem; color: #8fa3b8; margin: 10px 0 5px; }
+input, select, textarea {
+  width: 100%; padding: 11px 13px; border-radius: 9px; border: 1px solid #2a4a70;
+  background: #0a1428; color: #e8e8e8; font-size: .95rem; font-family: inherit;
+}
+input:focus, select:focus { outline: none; border-color: #c8aa6e; }
+
+.btn {
+  display: block; width: 100%; padding: 14px; border-radius: 10px; border: none;
+  font-size: 1rem; font-weight: 700; font-family: inherit; cursor: pointer;
+  margin-top: 12px; transition: .15s;
+}
+.btn-primary { background: linear-gradient(135deg, #c8aa6e, #a8873d); color: #0a1428; }
+.btn-primary:active { transform: scale(.98); }
+.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+.btn-sec { background: #1e3a5f; color: #e8e8e8; }
+
+.toggle { background: none; border: none; color: #7a8ba0; font-size: .8rem;
+  cursor: pointer; padding: 6px; width: 100%; text-align: left; font-family: inherit; }
+#settings-body { display: none; }
+#settings-body.show { display: block; }
+
+.drop {
+  border: 2px dashed #2a4a70; border-radius: 12px; padding: 28px 16px;
+  text-align: center; cursor: pointer; transition: .2s; background: #0d1728;
+}
+.drop:active, .drop.over { border-color: #c8aa6e; background: #16233a; }
+.drop .icon { font-size: 2.4rem; }
+.drop .txt { margin-top: 8px; color: #8fa3b8; font-size: .9rem; }
+.drop .sub { font-size: .75rem; color: #5a6b80; margin-top: 4px; }
+
+#preview { max-width: 100%; border-radius: 10px; margin-top: 12px; display: none; }
+
+#result-card { display: none; }
+#result { white-space: pre-wrap; font-size: .92rem; line-height: 1.75; }
+#result .err { color: #ff8a8a; }
+
+.status { text-align: center; padding: 12px; color: #c8aa6e; font-size: .9rem; display: none; }
+.status.show { display: block; }
+.spinner {
+  display: inline-block; width: 16px; height: 16px; border: 2px solid #c8aa6e;
+  border-top-color: transparent; border-radius: 50%; animation: spin .7s linear infinite;
+  vertical-align: middle; margin-right: 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.actions { display: flex; gap: 8px; margin-top: 12px; }
+.actions .btn { margin-top: 0; }
+
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: #c8aa6e; color: #0a1428; padding: 10px 20px; border-radius: 20px;
+  font-size: .85rem; font-weight: 600; opacity: 0; transition: .3s; pointer-events: none;
+}
+.toast.show { opacity: 1; }
+
+.hint { font-size: .75rem; color: #5a6b80; margin-top: 6px; }
+.footer { text-align: center; font-size: .72rem; color: #3a4a60; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <header>
+    <h1>🎮 LOL 裝備分析器</h1>
+    <p>拍張相 / 上傳截圖 → AI 即刻分析戰況</p>
+  </header>
+
+  <!-- 設定 -->
+  <div class="card">
+    <button class="toggle" onclick="toggleSettings()">⚙️ 設定（API Key / 模型）▾</button>
+    <div id="settings-body">
+      <label>Gemini API Key</label>
+      <input type="password" id="apiKey" placeholder="貼上你嘅 Gemini API Key" autocomplete="off">
+      <div class="hint">🔒 只會儲存喺你部裝置，唔會上傳去其他地方</div>
+
+      <label>AI 模型</label>
+      <input type="text" id="model" value="gemini-3.8-flash" placeholder="gemini-3.8-flash">
+      <div class="hint">如果報錯話模型唔存在，睇錯誤訊息用邊個新模型</div>
+
+      <button class="btn btn-sec" onclick="saveSettings()">💾 儲存設定</button>
+    </div>
+  </div>
+
+  <!-- 上傳 -->
+  <div class="card">
+    <h2>📷 上傳圖片</h2>
+    <div class="drop" id="drop" onclick="document.getElementById('file').click()">
+      <div class="icon">🖼️</div>
+      <div class="txt">點擊揀相 / 拍照</div>
+      <div class="sub">手機可以即場拍電腦屏幕，或者上傳截圖</div>
+    </div>
+    <input type="file" id="file" accept="image/*" capture="environment" hidden>
+    <img id="preview" alt="預覽">
+    <button class="btn btn-primary" id="analyzeBtn" onclick="analyze()" disabled>🔍 開始分析</button>
+  </div>
+
+  <!-- 結果 -->
+  <div class="card" id="result-card">
+    <h2>📊 分析結果</h2>
+    <div id="result"></div>
+    <div class="actions">
+      <button class="btn btn-sec" onclick="copyResult()">📋 複製</button>
+      <button class="btn btn-sec" onclick="clearResult()">🗑️ 清除</button>
+    </div>
+  </div>
+
+  <div class="status" id="status"></div>
+  <div class="footer">Made for League of Legends fans • Powered by Gemini</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ==== 設定 ==== */
+function toggleSettings() {
+  document.getElementById('settings-body').classList.toggle('show');
+}
+function saveSettings() {
+  const key = document.getElementById('apiKey').value.trim();
+  const model = document.getElementById('model').value.trim() || 'gemini-3.8-flash';
+  localStorage.setItem('lol_gemini_key', key);
+  localStorage.setItem('lol_gemini_model', model);
+  toast('✅ 設定已儲存');
+}
+
+/* ==== 初始化 ==== */
+(function init() {
+  const key = localStorage.getItem('lol_gemini_key') || '';
+  const model = localStorage.getItem('lol_gemini_model') || 'gemini-3.8-flash';
+  document.getElementById('apiKey').value = key;
+  document.getElementById('model').value = model;
+  if (!key) document.getElementById('settings-body').classList.add('show');
+})();
+
+/* ==== 圖片預覽 + 縮圖 ==== */
+let currentImageData = null;
+const fileInput = document.getElementById('file');
+
+function handleFile(f) {
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 1600;
+      let w = img.width, h = img.height;
+      if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      currentImageData = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+      const p = document.getElementById('preview');
+      p.src = 'data:image/jpeg;base64,' + currentImageData;
+      p.style.display = 'block';
+      document.getElementById('analyzeBtn').disabled = false;
+      document.getElementById('result-card').style.display = 'none';
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(f);
+}
+fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+
+/* ==== 貼上圖片（電腦 Ctrl+V）==== */
+document.addEventListener('paste', (e) => {
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+  for (const it of items) {
+    if (it.type.indexOf('image') === 0) {
+      handleFile(it.getAsFile());
+      toast('📋 已貼上圖片');
+    }
+  }
+});
+
+
+/* ==== 提示詞 ==== */
+const PROMPT = `你係一個 League of Legends (英雄聯盟) 專業教練。
+請仔細睇呢張 LOL 遊戲截圖，用繁體中文廣東話回答：
+
+1. 📦 裝備識別
+   - 我方每個英雄嘅裝備係咩？
+   - 對方每個英雄嘅裝備係咩？
+
+2. 📊 戰況分析
+   - 目前雙方補兵 / KDA / 經濟差距
+   - 邊一方有優勢？為什麼？
+
+3. ⚔️ 傷害類型分析
+   - 我方主要係 AD / AP / 坦克？
+   - 對方主要係 AD / AP / 坦克？
+
+4. 💡 即時建議
+   - 下一件應該買咩裝備？為什麼？
+   - 依家應該打團？發育？推塔？
+   - 有冇特別要注意嘅危險？
+
+請分點列出，用簡單易明嘅廣東話！
+如果截圖唔係 LOL 遊戲畫面，請直接話我知。`;
+
+/* ==== AI 分析 ==== */
+async function analyze() {
+  if (!currentImageData) return;
+  const key = document.getElementById('apiKey').value.trim();
+  const model = document.getElementById('model').value.trim() || 'gemini-3.8-flash';
+  if (!key) {
+    document.getElementById('settings-body').classList.add('show');
+    toast('❌ 請先填 API Key');
+    return;
+  }
+  localStorage.setItem('lol_gemini_key', key);
+  localStorage.setItem('lol_gemini_model', model);
+
+  const btn = document.getElementById('analyzeBtn');
+  btn.disabled = true;
+  showStatus(true, '🤖 AI 分析中，請稍等...');
+  document.getElementById('result-card').style.display = 'none';
+
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/'
+    + model + ':generateContent?key=' + encodeURIComponent(key);
+  const body = {
+    contents: [{
+      parts: [
+        { text: PROMPT },
+        { inline_data: { mime_type: 'image/jpeg', data: currentImageData } }
+      ]
+    }]
+  };
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (data.candidates && data.candidates[0]) {
+      const text = data.candidates[0].content.parts.map(p => p.text || '').join('');
+      showResult(text, false);
+    } else {
+      const msg = (data.error && data.error.message) || '未知錯誤';
+      showResult('❌ API 錯誤：' + msg + '\n\n💡 如果話模型唔存在，試下改設定入面嘅模型名', true);
+    }
+  } catch (err) {
+    showResult('❌ 連線失敗：' + err.message + '\n\n💡 檢查網絡連線', true);
+  } finally {
+    showStatus(false);
+    btn.disabled = false;
+  }
+}
+
+/* ==== 顯示 ==== */
+function showStatus(show, msg) {
+  const s = document.getElementById('status');
+  if (show) { s.innerHTML = '<span class="spinner"></span>' + msg; s.classList.add('show'); }
+  else { s.classList.remove('show'); }
+}
+function showResult(text, isErr) {
+  const el = document.getElementById('result');
+  el.innerHTML = isErr ? '<span class="err">' + esc(text) + '</span>' : esc(text);
+  const card = document.getElementById('result-card');
+  card.style.display = 'block';
+  card.scrollIntoView({ behavior: 'smooth' });
+}
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function copyResult() {
+  navigator.clipboard.writeText(document.getElementById('result').innerText).then(() => toast('📋 已複製'));
+}
+function clearResult() {
+  document.getElementById('result-card').style.display = 'none';
+  document.getElementById('result').innerHTML = '';
+}
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+</script>
+</body>
+</html>
+
