@@ -114,8 +114,9 @@ input:focus, select:focus { outline: none; border-color: #c8aa6e; }
 
   <!-- 模式切換 -->
   <div class="tabs">
-    <div class="tab active" id="tab-img" onclick="switchMode('img')">📸 圖片分析</div>
-    <div class="tab" id="tab-lane" onclick="switchMode('lane')">🧭 對線建議</div>
+    <div class="tab active" id="tab-img" onclick="switchMode('img')">📸 圖片</div>
+    <div class="tab" id="tab-lane" onclick="switchMode('lane')">🧭 對線</div>
+    <div class="tab" id="tab-draft" onclick="switchMode('draft')">🎯 選角</div>
   </div>
 
   <!-- 英雄資料輸入 -->
@@ -140,6 +141,8 @@ input:focus, select:focus { outline: none; border-color: #c8aa6e; }
     </div>
     <label>對線對手（敵方英雄）</label>
     <input id="enemyChamp" placeholder="例：達瑞斯">
+    <label>敵方全隊陣容（選角分析用，用逗號分隔）</label>
+    <input id="enemyTeam" placeholder="例：達瑞斯, 李星, 阿璃, 吉茵珂絲, 瑟雷西">
     <label>目前遊戲時間 / 情況（可選）</label>
     <input id="gameInfo" placeholder="例：開局 5 分鐘，對面 2 個頭">
   </div>
@@ -193,6 +196,7 @@ function saveSettings() {
   document.getElementById('myChamp').value = localStorage.getItem('wr_champ') || '';
   document.getElementById('myRole').value = localStorage.getItem('wr_role') || '';
   document.getElementById('enemyChamp').value = localStorage.getItem('wr_enemy') || '';
+  document.getElementById('enemyTeam').value = localStorage.getItem('wr_team') || '';
 })();
 
 /* ===== 模式切換 ===== */
@@ -201,9 +205,11 @@ function switchMode(m) {
   mode = m;
   document.getElementById('tab-img').classList.toggle('active', m === 'img');
   document.getElementById('tab-lane').classList.toggle('active', m === 'lane');
-  document.getElementById('upload-card').classList.toggle('hidden', m === 'lane');
-  document.getElementById('goBtn').textContent = m === 'lane' ? '🧭 攞對線建議' : '🔍 開始分析';
-  if (m === 'lane') document.getElementById('result-card').style.display = 'none';
+  document.getElementById('tab-draft').classList.toggle('active', m === 'draft');
+  document.getElementById('upload-card').classList.toggle('hidden', m !== 'img');
+  const labels = { img: '🔍 分析截圖', lane: '🧭 對線建議', draft: '🎯 分析選角' };
+  document.getElementById('goBtn').textContent = labels[m];
+  if (m !== 'img') document.getElementById('result-card').style.display = 'none';
 }
 
 /* ===== 圖片處理 ===== */
@@ -242,13 +248,16 @@ function getUserInfo() {
   const my = document.getElementById('myChamp').value.trim();
   const role = document.getElementById('myRole').value;
   const enemy = document.getElementById('enemyChamp').value.trim();
+  const team = document.getElementById('enemyTeam').value.trim();
   const info = document.getElementById('gameInfo').value.trim();
   localStorage.setItem('wr_champ', my);
   localStorage.setItem('wr_role', role);
   localStorage.setItem('wr_enemy', enemy);
+  localStorage.setItem('wr_team', team);
   let s = '';
   if (my) s += `我玩：${my}` + (role ? `（${role}）` : '') + '\n';
   if (enemy) s += `對線對手：${enemy}\n`;
+  if (team) s += `敵方陣容：${team}\n`;
   if (info) s += `目前情況：${info}\n`;
   return s;
 }
@@ -290,6 +299,31 @@ ${info}
 
 如果唔係遊戲畫面，請直接話我知。`;
 
+const DRAFT_PROMPT = (info) => `你係《英雄聯盟：激鬥峽谷》(Wild Rift) 專業教練，熟悉選角同對線。
+${info}
+而家係選角階段，請用繁體中文廣東話分析：
+
+1. 🎯 邊個係我對線對手？
+   - 根據我嘅位置同敵方陣容，判斷邊個敵人會同我對線。
+   - 如果係打野/輔助，講埋我主要會遇到邊個。
+
+2. ⚖️ 對線優劣勢
+   - 呢個對線我係優勢定劣勢？為什麼？
+
+3. 🧭 點同佢對線？（最重要）
+   - 開局 1-3 級點打？
+   - 幾時可以換血？有咇連招？
+   - 對手有咇關鍵技能要小心？
+   - 幾時要龜塔、幾時可以壓？
+
+4. 🛒 建議裝備（激鬥峽谷）
+   - 針對呢個對手，頭 3 件買咇？
+
+5. ⚠️ 三大禁忌
+   - 呢個對線最易犯嘅 3 個錯。
+
+請分點、簡短、實際。`;
+
 /* ===== 呼叫 Gemini ===== */
 async function callGemini(prompt, withImage) {
   const key = document.getElementById('apiKey').value.trim();
@@ -318,15 +352,17 @@ async function run() {
   const info = getUserInfo();
   const withImage = (mode === 'img');
   if (withImage && !currentImageData) { toast('❌ 請先上傳截圖'); return; }
-  if (!withImage && !info.trim()) { toast('❌ 請至少填你嘅英雄同對手'); return; }
+  if (mode === 'draft' && !document.getElementById('enemyTeam').value.trim() && !document.getElementById('enemyChamp').value.trim()) { toast('❌ 請填敵方陣容'); return; }
+  if (mode === 'lane' && !info.trim()) { toast('❌ 請至少填你嘅英雄同對手'); return; }
 
   const btn = document.getElementById('goBtn');
   btn.disabled = true;
-  showStatus(true, withImage ? '🤖 分析緊你嘅截圖...' : '🧭 整緊對線建議...');
+  const statusMsg = { img: '🤖 分析緊你嘅截圖...', lane: '🧭 整緊對線建議...', draft: '🎯 分析緊選角...' };
+  showStatus(true, statusMsg[mode]);
   document.getElementById('result-card').style.display = 'none';
 
   try {
-    const prompt = withImage ? IMG_PROMPT(info) : LANE_PROMPT(info);
+    const prompt = mode === 'img' ? IMG_PROMPT(info) : (mode === 'draft' ? DRAFT_PROMPT(info) : LANE_PROMPT(info));
     const text = await callGemini(prompt, withImage);
     showResult(text, false);
   } catch (err) {
