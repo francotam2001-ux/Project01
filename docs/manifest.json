@@ -1,0 +1,17 @@
+{
+  "name": "LOL 教練 - 激鬥峽谷分析",
+  "short_name": "LOL教練",
+  "description": "激鬥峽谷對線技巧、建議裝備、即時分析",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a1428",
+  "theme_color": "#0a1428",
+  "lang": "zh-Hant",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
