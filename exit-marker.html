@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>出入口標記助手 (離線版)</title>
+<style>
+:root{
+  --bg:#f4f6f9; --panel:#fff; --line:#dbe1ea; --ink:#1f2937; --muted:#6b7280;
+  --accent:#2563eb; --accent-weak:#e8efff; --ok:#16a34a; --ok-weak:#e7f7ee;
+  --warn:#b45309; --warn-weak:#fdf1e3; --shadow:0 1px 3px rgba(16,24,40,.08),0 1px 2px rgba(16,24,40,.06);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Microsoft JhengHei","Noto Sans TC",Roboto,Arial,sans-serif;
+  background:var(--bg); color:var(--ink); font-size:14px; line-height:1.5;
+}
+h1,h2,h3{margin:0}
+button,input,select,textarea{font-family:inherit;font-size:14px;color:inherit}
+a{color:var(--accent)}
+
+/* ---------- top bar ---------- */
+#topbar{position:sticky;top:0;z-index:50;background:var(--panel);border-bottom:1px solid var(--line);box-shadow:var(--shadow)}
+#topbar .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 14px;max-width:1200px;margin:0 auto}
+.brand{font-weight:700;font-size:15px;display:flex;align-items:center;gap:7px;white-space:nowrap}
+.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);display:inline-block}
+.spacer{flex:1 1 auto}
+.progressWrap{min-width:170px;flex:0 1 260px}
+.progressWrap .lbl{font-size:11px;color:var(--muted);display:flex;justify-content:space-between}
+.bar{height:7px;background:#e6eaf1;border-radius:99px;overflow:hidden;margin-top:3px}
+.bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#34d399,#16a34a);transition:width .25s}
+
+/* ---------- buttons ---------- */
+.btn{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);background:#fff;
+  padding:6px 11px;border-radius:8px;cursor:pointer;white-space:nowrap;transition:.15s}
+.btn:hover{background:#f7f9fc;border-color:#c7d0dc}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+.btn.ghost:hover{background:#eef2f7;color:var(--ink)}
+.btn.sm{padding:3px 8px;font-size:12px;border-radius:6px}
+.btn.danger{color:#b91c1c}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+
+/* ---------- layout ---------- */
+#main{max-width:1200px;margin:0 auto;padding:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);margin-bottom:14px}
+.card>header{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.card>header h2{font-size:14px;font-weight:700}
+.card>.body{padding:14px}
+.hint{color:var(--muted);font-size:12px}
+.mt8{margin-top:8px}.mt12{margin-top:12px}
+.flexrow{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+label.fld{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+input[type=text],input[type=number],select,textarea{
+  border:1px solid var(--line);border-radius:8px;padding:7px 9px;background:#fff;width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent-weak);border-color:var(--accent)}
+textarea{resize:vertical;min-height:110px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.45}
+.pill{display:inline-block;background:#eef2f7;color:var(--muted);border-radius:99px;padding:1px 8px;font-size:11px}
+
+/* ---------- output preview ---------- */
+#outPreview{width:100%;min-height:120px;background:#0f172a;color:#d7e3ff;border-color:#0f172a;
+  font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
+
+/* ---------- groups ---------- */
+#groupList{display:flex;flex-direction:column;gap:10px}
+.group{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.group>.ghead{display:flex;align-items:center;gap:9px;padding:8px 11px;background:#f8fafc;cursor:pointer;flex-wrap:wrap}
+.group>.ghead:hover{background:#f2f6fb}
+.group .gname{font-weight:600}
+.caret{width:12px;text-align:center;color:var(--muted);transition:transform .15s}
+.group.collapsed .caret{transform:rotate(-90deg)}
+.group.collapsed .gbody{display:none}
+.gbody{border-top:1px solid var(--line)}
+.gprog{margin-left:auto;font-size:11.5px;color:var(--muted)}
+.gprog.done{color:var(--ok);font-weight:600}
+
+/* rows */
+.rowitem{display:grid;grid-template-columns:26px minmax(150px,1.5fr) minmax(120px,1fr) minmax(150px,1.6fr) auto;
+  gap:8px;align-items:center;padding:7px 11px;border-top:1px dashed #eaeef4}
+.rowitem:first-child{border-top:none}
+.rowitem.done{background:var(--ok-weak)}
+.rowitem.hidden{display:none}
+.rowitem .addr{font-size:13px;word-break:break-word}
+.rowitem input[type=checkbox]{width:17px;height:17px;cursor:pointer;accent-color:var(--ok)}
+.coord{display:flex;gap:5px}
+.coord input{padding:4px 6px;font-size:12px;font-family:ui-monospace,Menlo,Consolas,monospace}
+.rowtools{display:flex;gap:3px;align-items:center}
+.tagOK{font-size:11px;color:var(--ok);font-weight:600;white-space:nowrap}
+@media (max-width:900px){
+  .rowitem{grid-template-columns:26px 1fr;grid-auto-rows:min-content}
+  .rowitem .addr{grid-column:2}
+  .rowitem .coord,.rowitem .descWrap,.rowitem .rowtools{grid-column:2}
+}
+.empty{color:var(--muted);text-align:center;padding:22px 0}
+
+/* toast */
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(20px);
+  background:#111827;color:#fff;padding:9px 16px;border-radius:9px;opacity:0;pointer-events:none;transition:.2s;z-index:99;font-size:13px}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div id="topbar">
+  <div class="row">
+    <div class="brand"><span class="dot"></span>出入口標記助手<span class="pill">離線可用</span></div>
+    <div class="spacer"></div>
+    <div class="progressWrap">
+      <div class="lbl"><span>整體進度</span><span id="progText">0 / 0</span></div>
+      <div class="bar"><i id="progBar"></i></div>
+    </div>
+    <button class="btn sm" id="btnNext" title="跳到下一個未完成">⏭ 下一個未完成</button>
+    <button class="btn sm" id="btnExport">💾 備份</button>
+    <button class="btn sm" id="btnImport">📂 還原</button>
+    <button class="btn sm danger" id="btnClear">🗑 清空</button>
+    <input type="file" id="fileImport" accept=".json" style="display:none">
+  </div>
+</div>
+
+<div id="main">
+
+  <!-- 1. 貼上地址 -->
+  <section class="card">
+    <header>
+      <h2>① 貼上地址</h2>
+      <span class="hint">由 Excel 直接複製一整欄，貼落下面（一行一個地址）</span>
+      <div class="spacer"></div>
+      <button class="btn ghost sm" id="btnToggleInput">收起 ▾</button>
+    </header>
+    <div class="body" id="inputBody">
+      <textarea id="pasteArea" spellcheck="false" placeholder="例：
+德輔道中120號 3樓
+德輔道中120號 後門
+德輔道中120號 車場入口
+皇后大道中1號
+皇后大道中1號 側門"></textarea>
+      <div class="flexrow mt8">
+        <label class="fld" style="max-width:170px">
+          <span>地址喺第幾欄（Tab 分隔）</span>
+          <select id="colAddr"><option value="1">第 1 欄</option><option value="2">第 2 欄</option><option value="3">第 3 欄</option><option value="4">第 4 欄</option><option value="5">第 5 欄</option></select>
+        </label>
+        <label class="fld" style="max-width:190px">
+          <span>用邊欄做分組（可選）</span>
+          <select id="colGroup"><option value="">自動判斷</option><option value="1">第 1 欄</option><option value="2">第 2 欄</option><option value="3">第 3 欄</option><option value="4">第 4 欄</option><option value="5">第 5 欄</option></select>
+        </label>
+        <label class="fld" style="max-width:170px">
+          <span>自動分組方式</span>
+          <select id="groupMode">
+            <option value="base">去掉樓層/室號（建議）</option>
+            <option value="first">只用第一段（逗號前）</option>
+            <option value="none">唔分組</option>
+          </select>
+        </label>
+        <button class="btn primary" id="btnParse">解析並分組</button>
+        <button class="btn" id="btnAppend">加入（唔清空舊有）</button>
+      </div>
+      <p class="hint mt8">貼上嘅內容會自動記落瀏覽器（localStorage），就算閂咗個網頁再開都仲喺度，唔怕唔見。建議做完按上面「備份」存一份 JSON。</p>
+    </div>
+  </section>
+
+  <!-- 2. 標記清單 -->
+  <section class="card">
+    <header>
+      <h2>② 逐個標記</h2>
+      <input type="text" id="search" placeholder="🔍 搜尋地址…" style="max-width:220px">
+      <select id="showFilter" style="max-width:140px">
+        <option value="all">顯示：全部</option>
+        <option value="todo">只顯示未完成</option>
+        <option value="done">只顯示已完成</option>
+      </select>
+      <div class="spacer"></div>
+      <button class="btn ghost sm" id="btnExpandAll">全部展開</button>
+      <button class="btn ghost sm" id="btnCollapseAll">全部收起</button>
+    </header>
+    <div class="body">
+      <div id="groupList"><div class="empty">仲未有資料　—　請先喺上面貼上地址（按「解析並分組」）</div></div>
+    </div>
+  </section>
+
+  <!-- 3. 輸出 -->
+  <section class="card">
+    <header>
+      <h2>③ 輸出（貼上系統用）</h2>
+      <div class="spacer"></div>
+      <button class="btn primary sm" id="btnCopy">📋 複製全部</button>
+      <button class="btn sm" id="btnDownload">⬇ 下載 CSV</button>
+    </header>
+    <div class="body">
+      <div class="flexrow">
+        <label class="fld" style="max-width:210px">
+          <span>格式</span>
+          <select id="outFormat">
+            <option value="coord">經緯度（每行一個點）</option>
+            <option value="tsv">製表符 TSV（可貼 Excel）</option>
+            <option value="csv">逗號 CSV</option>
+            <option value="json">JSON</option>
+            <option value="custom">自訂模板</option>
+          </select>
+        </label>
+        <label class="fld" style="max-width:170px">
+          <span>包含</span>
+          <select id="outScope">
+            <option value="all">全部</option>
+            <option value="done">只包含已完成</option>
+            <option value="todo">只包含未完成</option>
+          </select>
+        </label>
+        <label class="fld" style="max-width:170px">
+          <span>每幢樓之間</span>
+          <select id="outGap">
+            <option value="none">唔要分隔</option>
+            <option value="blank">加空行</option>
+            <option value="comment">加 # 樓宇名</option>
+          </select>
+        </label>
+      </div>
+      <div class="mt8" id="customWrap" style="display:none">
+        <label class="fld">
+          <span>自訂模板：可用 <code>{no}</code> <code>{group}</code> <code>{address}</code> <code>{lat}</code> <code>{lng}</code> <code>{desc}</code> <code>{note}</code> <code>{done}</code></span>
+          <input type="text" id="tpl" value="{lat}, {lng}">
+        </label>
+      </div>
+      <textarea id="outPreview" class="mt8" spellcheck="false" placeholder="輸出會顯示喺度…"></textarea>
+      <p class="hint mt8">未填座標嘅行，輸出時會保留空白，方便你之後補。</p>
+    </div>
+  </section>
+
+  <p class="hint" style="text-align:center;padding:4px 0 26px">
+    全部資料只留喺你部電腦（localStorage），唔會上傳任何地方。建議做法：喺屋企有網時，用每行右邊「🗺 Map / 👁 街景」連結逐幢查清楚，填好座標同描述，返工就純輸入。
+  </p>
+</div>
+
+<div id="toast"></div>
+<script>
+"use strict";
+/* ============================================================
+   出入口標記助手 — 純離線單檔工具
+   所有資料只存喺瀏覽器 localStorage，唔會上傳。
+   ============================================================ */
+const LS_KEY = "exitMarker.v1";
+let state = { rows: [], collapsed: {}, paste: "" };
+
+/* ---------- helpers ---------- */
+const $ = id => document.getElementById(id);
+function uid(){ return "r" + Math.random().toString(36).slice(2,8) + Date.now().toString(36).slice(-4); }
+function esc(s){
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c => (
+    {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+let toastTimer;
+function toast(msg){
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(()=>t.classList.remove("show"), 1700);
+}
+
+/* ---------- 分組邏輯 ---------- */
+function deriveGroup(addr, mode){
+  let s = String(addr || "").trim();
+  if(!s) return "(空白)";
+  if(mode === "none") return "全部";
+  if(mode === "first"){ const p = s.split(/[，,、]/)[0].trim(); return p || s; }
+  // base：去掉樓層、室號、出入口描述，只留「街道 + 門牌」
+  let b = s;
+  b = b.replace(/[（(][^)）]*[)）]/g, " ");                                  // (3樓)
+  b = b.replace(/\d+\s*(樓層|樓|層|室|號室)/g, " ");                          // 3樓 / 5室
+  b = b.replace(/(地下|地庫|地舖|閣樓|天台|平台|單位)/g, " ");
+  b = b.replace(/\b(G\/F|UG\/F|LG\/F|M\/F|\d+\s*F|Room|Unit|Flat|Floor)\b/gi, " ");
+  b = b.replace(/(正門|後門|側門|大門|前門|入口|出口|車場入口|車場出口|停車場|車場|樓梯|貨用升降機|客用升降機|貨𨋢|客𨋢|升降機)/g, " ");
+  b = b.replace(/\s+/g, " ").trim().replace(/[，,、\-–—\s]+$/,"");
+  return b || s;
+}
+
+/* ---------- 解析貼上內容 ---------- */
+function parseRows(text, colAddr, colGroup, mode){
+  const lines = String(text || "").replace(/\r/g, "").split("\n");
+  const out = [];
+  for(const raw of lines){
+    const line = raw.replace(/\t+$/g, "");
+    if(!line.trim()) continue;
+    const parts = line.split("\t").map(p => p.trim());
+    const address = (parts[Number(colAddr) - 1] || parts[0] || "").trim();
+    if(!address) continue;
+    let group;
+    if(colGroup){
+      group = (parts[Number(colGroup) - 1] || "").trim() || deriveGroup(address, mode);
+    } else {
+      group = deriveGroup(address, mode);
+    }
+    out.push({ id: uid(), group: group || "(未分組)", address,
+               lat: "", lng: "", desc: "", note: "", done: false });
+  }
+  return out;
+}
+
+function findRow(id){ return state.rows.find(r => r.id === id); }
+
+/* ---------- 儲存 ---------- */
+function save(){
+  try{
+    state.paste = $("pasteArea").value;
+    localStorage.setItem(LS_KEY, JSON.stringify(state));
+  }catch(e){ /* file:// 某啲瀏覽器可能停用 localStorage，忽略 */ }
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return;
+    const d = JSON.parse(raw);
+    if(d && Array.isArray(d.rows)){
+      state = { rows: d.rows, collapsed: d.collapsed || {}, paste: d.paste || "" };
+      $("pasteArea").value = state.paste;
+    }
+  }catch(e){}
+}
+/* ---------- 畫清單 ---------- */
+function rowHtml(r, no){
+  return `<div class="rowitem ${r.done ? "done" : ""}" data-id="${r.id}">
+    <input type="checkbox" data-f="done" ${r.done ? "checked" : ""} title="已入 system">
+    <div class="addr"><span class="hint">${no}.</span> ${esc(r.address)}</div>
+    <div class="coord">
+      <input type="text" data-f="lat" value="${esc(r.lat)}" placeholder="緯度 lat" title="緯度">
+      <input type="text" data-f="lng" value="${esc(r.lng)}" placeholder="經度 lng" title="經度">
+    </div>
+    <div class="descWrap">
+      <input type="text" data-f="desc" value="${esc(r.desc)}" placeholder="出入口描述（正門／後門…）">
+    </div>
+    <div class="rowtools">
+      <button class="btn sm ghost" data-act="map"       title="Google Map 搜尋（要上網）">🗺</button>
+      <button class="btn sm ghost" data-act="street"    title="街景（有座標會直接用座標）">👁</button>
+      <button class="btn sm ghost" data-act="copycoord" title="複製座標">⧉</button>
+      <button class="btn sm ghost danger" data-act="del" title="刪除">✕</button>
+    </div>
+  </div>`;
+}
+
+function render(){
+  const list = $("groupList");
+  if(!state.rows.length){
+    list.innerHTML = '<div class="empty">仲未有資料　—　請先喺上面貼上地址（按「解析並分組」）</div>';
+    updateProgress(); updateOutput(); return;
+  }
+  const q = $("search").value.trim().toLowerCase();
+  const show = $("showFilter").value;
+
+  const order = [], map = new Map();
+  state.rows.forEach(r => {
+    if(!map.has(r.group)){ map.set(r.group, []); order.push(r.group); }
+    map.get(r.group).push(r);
+  });
+
+  let html = "";
+  for(const g of order){
+    const rows = map.get(g);
+    const vis = rows.filter(r => {
+      if(show === "todo" && r.done) return false;
+      if(show === "done" && !r.done) return false;
+      if(q && !((r.address || "").toLowerCase().includes(q) ||
+                (r.desc || "").toLowerCase().includes(q))) return false;
+      return true;
+    });
+    if(!vis.length) continue;
+    const doneN = rows.filter(r => r.done).length;
+    const collapsed = !!state.collapsed[g] && !q && show === "all";
+    html += `<div class="group ${collapsed ? "collapsed" : ""}" data-group="${esc(g)}">
+      <div class="ghead" data-toggle="1">
+        <span class="caret">▾</span>
+        <span class="gname">${esc(g)}</span>
+        <span class="pill">${rows.length} 個</span>
+        <span class="gprog ${doneN === rows.length ? "done" : ""}">${doneN}/${rows.length} 完成</span>
+      </div>
+      <div class="gbody">`;
+    for(const r of vis) html += rowHtml(r, state.rows.indexOf(r) + 1);
+    html += "</div></div>";
+  }
+  list.innerHTML = html || '<div class="empty">無符合嘅項目</div>';
+  updateProgress(); updateOutput();
+}
+
+/* ---------- 進度 ---------- */
+function updateProgress(){
+  const total = state.rows.length;
+  const done = state.rows.filter(r => r.done).length;
+  $("progText").textContent = `${done} / ${total}`;
+  $("progBar").style.width = total ? (done / total * 100) + "%" : "0%";
+}
+
+/* ---------- 輸出 ---------- */
+function rowsForOutput(){
+  const scope = $("outScope").value;
+  return state.rows.filter(r => scope === "all" ? true : scope === "done" ? r.done : !r.done);
+}
+function csvCell(v){
+  v = String(v == null ? "" : v);
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+}
+function fmtLine(fmt, r, i, group){
+  if(fmt === "coord")  return [r.lat, r.lng].map(s => String(s || "").trim()).filter(Boolean).join(", ");
+  if(fmt === "tsv")    return [r.address, r.lat, r.lng, r.desc, r.note, r.done ? "1" : "0"].join("\t");
+  if(fmt === "csv")    return [r.address, r.lat, r.lng, r.desc, r.note, r.done ? "1" : "0"].map(csvCell).join(",");
+  if(fmt === "custom"){
+    const tpl = $("tpl").value;
+    const vals = { no: i + 1, group: group, address: r.address, lat: r.lat, lng: r.lng,
+                   desc: r.desc, note: r.note, done: r.done ? "1" : "0" };
+    return tpl.replace(/\{(no|group|address|lat|lng|desc|note|done)\}/g, (m, k) => vals[k] == null ? "" : vals[k]);
+  }
+  return "";
+}
+function buildOutput(){
+  const fmt = $("outFormat").value;
+  const gap = $("outGap").value;
+  const rows = rowsForOutput();
+  if(fmt === "json"){
+    return JSON.stringify(rows.map(r => ({
+      group: r.group, address: r.address, lat: r.lat, lng: r.lng,
+      desc: r.desc, note: r.note, done: r.done
+    })), null, 2);
+  }
+  const order = [], map = new Map();
+  rows.forEach(r => {
+    if(!map.has(r.group)){ map.set(r.group, []); order.push(r.group); }
+    map.get(r.group).push(r);
+  });
+  const blocks = order.map(g => {
+    const lines = map.get(g).map((r, i) => fmtLine(fmt, r, i, g));
+    return gap === "comment" ? "# " + g + "\n" + lines.join("\n") : lines.join("\n");
+  });
+  return blocks.join(gap === "none" ? "\n" : "\n\n");
+}
+function updateOutput(){ $("outPreview").value = buildOutput(); }
+
+/* ---------- 複製 / 下載 ---------- */
+async function copyText(t){
+  if(!t){ toast("冇嘢可以複製"); return false; }
+  try{ await navigator.clipboard.writeText(t); return true; }catch(e){}
+  const ta = document.createElement("textarea");
+  ta.value = t; ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.select();
+  let ok = false; try{ ok = document.execCommand("copy"); }catch(e){}
+  document.body.removeChild(ta); return ok;
+}
+function download(name, text, mime){
+  const blob = new Blob([text], { type: (mime || "text/plain") + ";charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name; document.body.appendChild(a); a.click();
+  document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+function stamp(){
+  const d = new Date(), p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
+}
+/* ============================================================
+   事件綁定
+   ============================================================ */
+const list = $("groupList");
+
+list.addEventListener("input", e => {
+  const inp = e.target.closest("input[data-f]");
+  if(!inp || inp.dataset.f === "done") return;
+  const item = inp.closest(".rowitem"), r = findRow(item.dataset.id);
+  if(!r) return;
+  r[inp.dataset.f] = inp.value;
+  save(); updateOutput();
+});
+
+list.addEventListener("change", e => {
+  const inp = e.target.closest('input[data-f="done"]');
+  if(!inp) return;
+  const item = inp.closest(".rowitem"), r = findRow(item.dataset.id);
+  if(!r) return;
+  r.done = inp.checked; save(); render();
+});
+
+list.addEventListener("click", e => {
+  const btn = e.target.closest("button[data-act]");
+  if(btn){
+    const item = btn.closest(".rowitem"), r = findRow(item.dataset.id);
+    if(!r) return;
+    const act = btn.dataset.act;
+    if(act === "map"){
+      window.open("https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(r.address), "_blank");
+    } else if(act === "street"){
+      const hasC = r.lat && r.lng;
+      const url = hasC
+        ? `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${encodeURIComponent(r.lat)},${encodeURIComponent(r.lng)}`
+        : "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(r.address);
+      window.open(url, "_blank");
+    } else if(act === "copycoord"){
+      const c = [r.lat, r.lng].map(s => String(s || "").trim()).filter(Boolean).join(", ");
+      copyText(c).then(ok => toast(ok ? "已複製座標" : "複製失敗，請手動選取"));
+    } else if(act === "del"){
+      state.rows = state.rows.filter(x => x.id !== r.id);
+      save(); render();
+    }
+    return;
+  }
+  const head = e.target.closest(".ghead");
+  if(head){
+    const g = head.closest(".group").dataset.group;
+    state.collapsed[g] = !state.collapsed[g];
+    save(); render();
+  }
+});
+
+/* Enter 跳去下一行同一欄，方便快速輸入 */
+list.addEventListener("keydown", e => {
+  if(e.key !== "Enter") return;
+  const inp = e.target.closest("input[data-f]");
+  if(!inp) return;
+  e.preventDefault();
+  const items = [...list.querySelectorAll(".rowitem")];
+  const cur = inp.closest(".rowitem");
+  const next = items[items.indexOf(cur) + 1];
+  if(next){
+    const t = next.querySelector(`input[data-f="${inp.dataset.f}"]`);
+    if(t){ t.focus(); if(t.select) t.select(); }
+  }
+});
+
+/* 解析 / 加入 */
+function doParse(append){
+  const rows = parseRows($("pasteArea").value, $("colAddr").value, $("colGroup").value, $("groupMode").value);
+  if(!rows.length){ toast("冇搵到任何地址"); return; }
+  if(append){
+    state.rows = state.rows.concat(rows);
+    toast(`已加入 ${rows.length} 個地址`);
+  } else {
+    state.rows = rows;
+    toast(`已解析 ${rows.length} 個地址，分咗 ${new Set(rows.map(r => r.group)).size} 組`);
+  }
+  state.collapsed = {};
+  save(); render();
+}
+$("btnParse").addEventListener("click", () => doParse(false));
+$("btnAppend").addEventListener("click", () => doParse(true));
+/* 篩選 / 顯示 */
+$("search").addEventListener("input", render);
+$("showFilter").addEventListener("change", render);
+$("btnExpandAll").addEventListener("click", () => { state.collapsed = {}; save(); render(); });
+$("btnCollapseAll").addEventListener("click", () => {
+  state.rows.forEach(r => state.collapsed[r.group] = true); save(); render();
+});
+
+/* 下一個未完成 */
+$("btnNext").addEventListener("click", () => {
+  const r = state.rows.find(x => !x.done);
+  if(!r){ toast("全部已完成 🎉"); return; }
+  $("showFilter").value = "all";
+  state.collapsed[r.group] = false;
+  render();
+  const el = list.querySelector(`.rowitem[data-id="${r.id}"]`);
+  if(el){
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const c = el.querySelector('input[data-f="lat"]');
+    if(c) setTimeout(() => c.focus(), 350);
+  }
+});
+
+/* 輸入區收起 */
+$("btnToggleInput").addEventListener("click", () => {
+  const body = $("inputBody"), btn = $("btnToggleInput");
+  const hidden = body.style.display === "none";
+  body.style.display = hidden ? "" : "none";
+  btn.textContent = hidden ? "收起 ▾" : "展開 ▸";
+});
+
+/* 輸出設定 */
+$("outFormat").addEventListener("change", () => {
+  $("customWrap").style.display = $("outFormat").value === "custom" ? "" : "none";
+  updateOutput();
+});
+$("outScope").addEventListener("change", updateOutput);
+$("outGap").addEventListener("change", updateOutput);
+$("tpl").addEventListener("input", updateOutput);
+
+$("btnCopy").addEventListener("click", () => {
+  copyText($("outPreview").value).then(ok => toast(ok ? "已複製，可以貼上系統" : "複製失敗，請手動全選複製"));
+});
+$("btnDownload").addEventListener("click", () => {
+  const fmt = $("outFormat").value;
+  const ext = fmt === "json" ? "json" : fmt === "tsv" ? "tsv" : "csv";
+  const mime = fmt === "json" ? "application/json" : "text/csv";
+  download(`出入口_${stamp()}.${ext}`, buildOutput(), mime);
+  toast("已下載");
+});
+
+/* 備份 / 還原 / 清空 */
+$("btnExport").addEventListener("click", () => {
+  download(`出入口備份_${stamp()}.json`, JSON.stringify(state, null, 2), "application/json");
+  toast("已下載備份");
+});
+$("btnImport").addEventListener("click", () => $("fileImport").click());
+$("fileImport").addEventListener("change", e => {
+  const f = e.target.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try{
+      const d = JSON.parse(rd.result);
+      if(d && Array.isArray(d.rows)){
+        state = { rows: d.rows, collapsed: d.collapsed || {}, paste: d.paste || "" };
+        $("pasteArea").value = state.paste;
+        save(); render(); toast("已還原備份");
+      } else toast("檔案格式唔啱");
+    }catch(err){ toast("讀取失敗：" + err.message); }
+  };
+  rd.readAsText(f);
+  e.target.value = "";
+});
+$("btnClear").addEventListener("click", () => {
+  if(!confirm("確定清空所有資料？（建議先按「備份」）")) return;
+  state = { rows: [], collapsed: {}, paste: "" };
+  $("pasteArea").value = "";
+  try{ localStorage.removeItem(LS_KEY); }catch(e){}
+  render(); toast("已清空");
+});
+
+/* 離開前自動存一次 */
+window.addEventListener("beforeunload", save);
+
+/* 開機 */
+load();
+if(state.rows.length) render(); else { updateProgress(); updateOutput(); }
+</script>
+</body>
+</html>
